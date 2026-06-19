@@ -93,46 +93,39 @@ jobs:
       - name: 🔧 Patch Gradle signing configuration
         run: |
           python3 << 'PYEOF'
-          import re
-
           path = "android/app/build.gradle"
           with open(path, "r") as f:
               content = f.read()
 
-          # Signing config block to inject
-          signing_config = """
-              signingConfigs {
-                  release {
-                      storeFile file("release.keystore")
-                      storePassword project.findProperty("KEYSTORE_PASS") ?: ""
-                      keyAlias project.findProperty("KEY_ALIAS") ?: ""
-                      keyPassword project.findProperty("KEY_PASS") ?: ""
-                  }
-              }
-          """
-
-          # Inject signingConfigs before buildTypes
-          if "signingConfigs" not in content:
-              content = content.replace(
-                  "    buildTypes {",
-                  signing_config + "\n    buildTypes {",
-                  1
-              )
-
-          # Make release build type use signing config
-          release_patch = """        release {
-                  signingConfig signingConfigs.release"""
-          content = re.sub(
-              r'        release \{',
-              release_patch,
-              content,
-              count=1
+          # expo prebuild generates a signingConfigs.debug block and the release
+          # buildType already references signingConfigs.debug. We simply override
+          # the debug keystore values to use our release keystore & credentials.
+          content = content.replace(
+              "storeFile file('debug.keystore')",
+              "storeFile file('release.keystore')"
+          )
+          content = content.replace(
+              "storePassword 'android'",
+              "storePassword System.getenv('KEYSTORE_PASSWORD') ?: ''"
+          )
+          content = content.replace(
+              "keyAlias 'androiddebugkey'",
+              "keyAlias System.getenv('KEY_ALIAS') ?: ''"
+          )
+          content = content.replace(
+              "keyPassword 'android'",
+              "keyPassword System.getenv('KEY_PASSWORD') ?: ''"
           )
 
           with open(path, "w") as f:
               f.write(content)
 
-          print("✅ build.gradle patched with signing config")
+          # Print the signingConfigs block so we can verify in CI logs
+          idx = content.find("signingConfigs")
+          if idx >= 0:
+              print("=== signingConfigs block after patch ===")
+              print(content[idx:idx+400])
+          print("✅ build.gradle patched successfully")
           PYEOF
 
       # ── Gradle cache (speeds up builds significantly) ─────────────────────
@@ -152,12 +145,13 @@ jobs:
           cd android
           chmod +x gradlew
           ./gradlew assembleRelease \
-            -PKEYSTORE_PASS="${{ secrets.KEYSTORE_PASSWORD }}" \
-            -PKEY_ALIAS="${{ secrets.KEY_ALIAS }}" \
-            -PKEY_PASS="${{ secrets.KEY_PASSWORD }}" \
             --no-daemon \
             --stacktrace
         env:
+          # Passed as env vars — read by System.getenv() in the patched build.gradle
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.daemon=false"
 
       # ── Rename APK with version tag ───────────────────────────────────────
