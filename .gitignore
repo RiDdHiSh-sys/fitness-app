@@ -18,3 +18,18 @@ env/
 
 # Verification cache
 .pytest_cache/
+
+# ─── React Native / Expo ──────────────────────────────────────────────────────
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/android/
+mobile/ios/
+mobile/*.jks
+mobile/*.p8
+mobile/*.p12
+mobile/*.key
+mobile/*.mobileprovision
+mobile/*.orig.*
+mobile/web-build/
+mobile/eas-build-output.json
