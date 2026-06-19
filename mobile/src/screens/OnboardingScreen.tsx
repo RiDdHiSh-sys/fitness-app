@@ -37,6 +37,20 @@ export default function OnboardingScreen() {
       Alert.alert('Missing Info', 'Please fill in all fields.');
       return;
     }
+    
+    if (Number(age) <= 0 || Number(age) > 120) {
+      Alert.alert('Invalid Age', 'Please enter a valid age (1-120).');
+      return;
+    }
+    if (Number(weight) <= 0 || Number(weight) > 500) {
+      Alert.alert('Invalid Weight', 'Please enter a valid weight in kg (max 500).');
+      return;
+    }
+    if (Number(height) <= 0 || Number(height) > 300) {
+      Alert.alert('Invalid Height', 'Please enter a valid height in cm (max 300).');
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await createUser({
