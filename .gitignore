@@ -33,3 +33,8 @@ mobile/*.mobileprovision
 mobile/*.orig.*
 mobile/web-build/
 mobile/eas-build-output.json
+
+# ─── Keystores (NEVER commit these) ──────────────────────────────────────────
+*.keystore
+*.jks
+*.b64
