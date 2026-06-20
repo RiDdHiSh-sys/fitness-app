@@ -2,7 +2,7 @@ import uvicorn
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
+from routes.ai_insights import router as ai_router
 from database import connect_to_mongo, close_mongo_connection
 from routes import (
     user,
@@ -50,6 +50,7 @@ app.include_router(chat.router, tags=["AI Chat Coach"])
 app.include_router(recovery.router, tags=["Recovery & Sleep"])
 app.include_router(insights.router, tags=["Weekly Insights"])
 app.include_router(pose.router, tags=["Real-time Pose Feedback"])
+app.include_router(ai_router, tags=["AI Insights"])  
 
 @app.get("/", tags=["Health"])
 async def root():
