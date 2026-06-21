@@ -2,18 +2,29 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from database import get_db
 from models.daily_log import SleepCreate
-from routes.user import verify_user_exists
+from routes.user import verify_user_exists, get_current_user_id
 from routes.workout import get_today_start
 from utils.macro_calc import calculate_recovery_score
 
 router = APIRouter()
 
 @router.post("/sleep", status_code=status.HTTP_200_OK)
-async def log_sleep(sleep_data: SleepCreate, db = Depends(get_db)):
+async def log_sleep(
+    sleep_data: SleepCreate,
+    db = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
     """
     Logs sleep hours for today or a specific date.
     Updates the daily log and recalculates the recovery score.
     """
+    # Enforce authentication user match
+    if sleep_data.user_id != current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Cannot log sleep for another user"
+        )
+        
     # 1. Verify user
     await verify_user_exists(sleep_data.user_id, db)
     
@@ -66,11 +77,22 @@ async def log_sleep(sleep_data: SleepCreate, db = Depends(get_db)):
         )
 
 @router.get("/recovery-score/{user_id}", status_code=status.HTTP_200_OK)
-async def get_recovery_score(user_id: str, db = Depends(get_db)):
+async def get_recovery_score(
+    user_id: str,
+    db = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
     """
     Returns the user's recovery score, labeling, and reasoning for today.
     Handles unlogged states gracefully.
     """
+    # Enforce authentication user match
+    if user_id != current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Cannot access recovery score for another user"
+        )
+        
     # 1. Verify user exists
     await verify_user_exists(user_id, db)
     

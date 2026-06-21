@@ -1,17 +1,28 @@
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from database import get_db
-from routes.user import verify_user_exists
+from routes.user import verify_user_exists, get_current_user_id
 from routes.workout import get_today_start
 
 router = APIRouter()
 
 @router.get("/weekly-insights/{user_id}", status_code=status.HTTP_200_OK)
-async def get_weekly_insights(user_id: str, db = Depends(get_db)):
+async def get_weekly_insights(
+    user_id: str,
+    db = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
     """
     Returns weekly insights for the user over the last 7 days.
     Compiles average nutrition metrics and highlights the most active/consistent day.
     """
+    # Enforce authentication user match
+    if user_id != current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Cannot access insights for another user"
+        )
+        
     # 1. Verify user exists
     await verify_user_exists(user_id, db)
     

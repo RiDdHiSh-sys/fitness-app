@@ -2,17 +2,28 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from database import get_db
 from models.pose import PoseFeedbackRequest, PoseFeedbackResponse, PoseFrameData, PoseSessionDB
-from routes.user import verify_user_exists
+from routes.user import verify_user_exists, get_current_user_id
 from routes.workout import get_today_start
 
 router = APIRouter()
 
 @router.post("/pose-feedback", response_model=PoseFeedbackResponse, status_code=status.HTTP_200_OK)
-async def get_pose_feedback(pose_req: PoseFeedbackRequest, db = Depends(get_db)):
+async def get_pose_feedback(
+    pose_req: PoseFeedbackRequest,
+    db = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
     """
     Evaluates real-time camera exercise angles, returns corrective feedback,
     and logs the frame to the user's pose session.
     """
+    # Enforce authentication user match
+    if pose_req.user_id != current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Cannot log pose feedback for another user"
+        )
+        
     # 1. Verify user exists
     await verify_user_exists(pose_req.user_id, db)
     

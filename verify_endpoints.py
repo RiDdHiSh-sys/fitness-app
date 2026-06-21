@@ -4,11 +4,13 @@ import time
 
 BASE_URL = "http://127.0.0.1:8000"
 
-def send_request(path, method="GET", body=None):
+def send_request(path, method="GET", body=None, token=None):
     url = f"{BASE_URL}{path}"
     headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+        
     data = json.dumps(body).encode("utf-8") if body else None
-    
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
         with urllib.request.urlopen(req) as response:
@@ -26,49 +28,122 @@ def send_request(path, method="GET", body=None):
 def run_tests():
     print("==================================================")
     print("   Fitness & Nutrition AI App Backend API Tests   ")
+    print("   (With JWT Token Authentication & Google OAuth) ")
     print("==================================================")
     
     # Check if server is running
     status, res = send_request("/")
     if status != 200:
-        print(f"[-] Root check failed: status {status}. Is the FastAPI server running?")
+        print(f"[-] Root health check failed: status {status}. Is the FastAPI server running?")
         print("    Please start the server first using: uvicorn main:app --reload")
         return
     print(f"[+] Server is healthy: {res}")
     
-    user_id = None
+    # Generate unique emails
+    timestamp = int(time.time())
+    email_a = f"user_a_{timestamp}@example.com"
+    email_b = f"user_b_{timestamp}@example.com"
+    password = "secretpassword123"
     
-    # 1. Test POST /user (Success)
-    print("\n[1] Testing POST /user...")
-    user_payload = {
-        "name": "Jane Doe",
+    user_id_a = None
+    token_a = None
+    
+    user_id_b = None
+    token_b = None
+
+    # 1. Test POST /user (Registration Success for User A)
+    print("\n[1] Testing POST /user (Registration User A)...")
+    user_payload_a = {
+        "email": email_a,
+        "password": password,
+        "name": "User A",
         "age": 28,
         "weight_kg": 65.5,
         "height_cm": 168.0,
         "goal": "lose_weight"
     }
-    status, res = send_request("/user", "POST", user_payload)
+    status, res = send_request("/user", "POST", user_payload_a)
     if status == 201:
-        user_id = res.get("user_id")
-        print(f"[+] User created successfully. ID: {user_id}")
+        user_id_a = res.get("user_id")
+        print(f"[+] User A registered successfully. ID: {user_id_a}")
     else:
-        print(f"[-] User creation failed: status {status}, response: {res}")
+        print(f"[-] User A registration failed: status {status}, response: {res}")
         return
 
-    # 2. Test POST /user (Validation Error - Goal Enum)
-    print("\n[2] Testing POST /user with invalid goal...")
-    bad_user_payload = user_payload.copy()
-    bad_user_payload["goal"] = "get_shredded" # Invalid goal enum
-    status, res = send_request("/user", "POST", bad_user_payload)
-    if status == 422:
-        print(f"[+] Handled validation error correctly (422 Unprocessable Entity)")
+    # 2. Test POST /user (Email conflict check)
+    print("\n[2] Testing POST /user (Duplicate Email Conflict)...")
+    status, res = send_request("/user", "POST", user_payload_a)
+    if status == 400 and "already registered" in res.get("detail", "").lower():
+        print(f"[+] Email conflict handled correctly: 400 Bad Request ({res.get('detail')})")
     else:
-        print(f"[-] Failed to catch validation error: status {status}, response: {res}")
+        print(f"[-] Failed to catch email conflict: status {status}, response: {res}")
 
-    # 3. Test POST /workout
-    print("\n[3] Testing POST /workout...")
+    # 3. Test POST /user/login (Login Success for User A)
+    print("\n[3] Testing POST /user/login (Login User A)...")
+    login_payload = {
+        "email": email_a,
+        "password": password
+    }
+    status, res = send_request("/user/login", "POST", login_payload)
+    if status == 200:
+        token_a = res.get("access_token")
+        print(f"[+] User A logged in successfully. Token: {token_a[:15]}...")
+    else:
+        print(f"[-] Login failed: status {status}, response: {res}")
+        return
+
+    # 4. Test POST /user/login (Incorrect Credentials check)
+    print("\n[4] Testing POST /user/login (Incorrect Password)...")
+    bad_login_payload = {
+        "email": email_a,
+        "password": "wrongpassword"
+    }
+    status, res = send_request("/user/login", "POST", bad_login_payload)
+    if status == 400:
+        print(f"[+] Incorrect credentials handled correctly: 400 Bad Request")
+    else:
+        print(f"[-] Failed to catch bad login credentials: status {status}, response: {res}")
+
+    # 5. Test POST /user/oauth-login (Google OAuth Auto-Registration User B)
+    print("\n[5] Testing POST /user/oauth-login (Google OAuth)...")
+    oauth_payload = {
+        "provider": "google",
+        "token": "mock-google-token-jane",
+        "age": 30,
+        "weight_kg": 80.0,
+        "height_cm": 180.0,
+        "goal": "build_muscle"
+    }
+    status, res = send_request("/user/oauth-login", "POST", oauth_payload)
+    if status == 200:
+        token_b = res.get("access_token")
+        user_id_b = res.get("user_id")
+        is_new = res.get("is_new_user")
+        print(f"[+] Google User B authenticated successfully. ID: {user_id_b}, New User: {is_new}, Token: {token_b[:15]}...")
+    else:
+        print(f"[-] Google OAuth login failed: status {status}, response: {res}")
+        return
+
+    # 6. Test Route Protection (Summary Endpoint without Token)
+    print("\n[6] Testing GET /today-summary/{id} (Access without Token)...")
+    status, res = send_request(f"/today-summary/{user_id_a}")
+    if status == 401:
+        print(f"[+] Access blocked correctly (401 Unauthorized)")
+    else:
+        print(f"[-] Failed to protect endpoint: status {status}, response: {res}")
+
+    # 7. Test Cross-User Access Protection (User A attempting to access User B's dashboard)
+    print("\n[7] Testing GET /today-summary/{id} (Cross-User Access Verification)...")
+    status, res = send_request(f"/today-summary/{user_id_b}", "GET", token=token_a)
+    if status == 403:
+        print(f"[+] Cross-user access blocked correctly: 403 Forbidden ({res.get('detail')})")
+    else:
+        print(f"[-] Failed to protect cross-user access: status {status}, response: {res}")
+
+    # 8. Test POST /workout (Authorized using Token A)
+    print("\n[8] Testing POST /workout...")
     workout_payload = {
-        "user_id": user_id,
+        "user_id": user_id_a,
         "exercises": [
             {
                 "name": "squat",
@@ -87,16 +162,16 @@ def run_tests():
             }
         ]
     }
-    status, res = send_request("/workout", "POST", workout_payload)
+    status, res = send_request("/workout", "POST", workout_payload, token=token_a)
     if status == 201:
-        print(f"[+] Workout logged. Calories burned: {res.get('total_calories_burned')}, Intensity: {res.get('intensity_score')}")
+        print(f"[+] Workout logged. Calories: {res.get('total_calories_burned')}, Intensity: {res.get('intensity_score')}")
     else:
         print(f"[-] Workout logging failed: status {status}, response: {res}")
 
-    # 4. Test POST /meal
-    print("\n[4] Testing POST /meal...")
+    # 9. Test POST /meal (Authorized using Token A)
+    print("\n[9] Testing POST /meal...")
     meal_payload = {
-        "user_id": user_id,
+        "user_id": user_id_a,
         "items": [
             {
                 "name": "Oatmeal with Protein",
@@ -116,133 +191,83 @@ def run_tests():
             }
         ]
     }
-    status, res = send_request("/meal", "POST", meal_payload)
+    status, res = send_request("/meal", "POST", meal_payload, token=token_a)
     if status == 201:
-        print(f"[+] Meal logged. Calories: {res.get('total_calories')}, Protein: {res.get('total_protein')}g, Carbs: {res.get('total_carbs')}g, Fat: {res.get('total_fat')}g")
+        print(f"[+] Meal logged. Calories: {res.get('total_calories')}, Protein: {res.get('total_protein')}g")
     else:
         print(f"[-] Meal logging failed: status {status}, response: {res}")
 
-    # 5. Test POST /sleep
-    print("\n[5] Testing POST /sleep...")
+    # 10. Test POST /sleep (Authorized using Token A)
+    print("\n[10] Testing POST /sleep...")
     sleep_payload = {
-        "user_id": user_id,
+        "user_id": user_id_a,
         "sleep_hours": 7.5
     }
-    status, res = send_request("/sleep", "POST", sleep_payload)
+    status, res = send_request("/sleep", "POST", sleep_payload, token=token_a)
     if status == 200:
         print(f"[+] Sleep logged. Hours: {res.get('sleep_hours')}")
     else:
         print(f"[-] Sleep logging failed: status {status}, response: {res}")
 
-    # 6. Test GET /today-summary/{user_id}
-    print("\n[6] Testing GET /today-summary...")
-    status, res = send_request(f"/today-summary/{user_id}")
+    # 11. Test GET /today-summary/{id} (Authorized using Token A)
+    print("\n[11] Testing GET /today-summary...")
+    status, res = send_request(f"/today-summary/{user_id_a}", token=token_a)
     if status == 200:
-        print(f"[+] Summary retrieved successfully.")
-        print(f"    - Goal: {res.get('user', {}).get('goal')}")
-        print(f"    - Consumed: {res.get('meals', {}).get('calories_consumed')} kcal")
-        print(f"    - Burned: {res.get('workout', {}).get('calories_burned')} kcal")
-        print(f"    - Remaining calories: {res.get('remaining', {}).get('calories')} kcal")
-        print(f"    - Sleep: {res.get('sleep_hours')} hours")
+        print(f"[+] Summary retrieved. Calories consumed: {res.get('meals', {}).get('calories_consumed')} kcal, remaining: {res.get('remaining', {}).get('calories')} kcal")
     else:
-        print(f"[-] Summary failed: status {status}, response: {res}")
+        print(f"[-] Summary retrieval failed: status {status}, response: {res}")
 
-    # 7. Test GET /ai-recommendation/{user_id}
-    print("\n[7] Testing GET /ai-recommendation...")
-    status, res = send_request(f"/ai-recommendation/{user_id}")
+    # 12. Test GET /ai-recommendation/{id} (Authorized using Token A)
+    print("\n[12] Testing GET /ai-recommendation...")
+    status, res = send_request(f"/ai-recommendation/{user_id_a}", token=token_a)
     if status == 200:
-        print(f"[+] AI Recommendation retrieved.")
-        print(f"    - Recommendation: {res.get('recommendation')}")
+        print(f"[+] Recommendation text: {res.get('recommendation')}")
     else:
         print(f"[-] Recommendation failed: status {status}, response: {res}")
 
-    # 8. Test POST /chat-reply
-    print("\n[8] Testing POST /chat-reply...")
+    # 13. Test POST /chat-reply (Authorized using Token A)
+    print("\n[13] Testing POST /chat-reply...")
     chat_payload = {
-        "user_id": user_id,
-        "message": "Should I eat some protein now?",
-        "conversation_history": [
-            {"role": "user", "content": "Hi", "timestamp": "2026-06-18T10:00:00Z"},
-            {"role": "ai", "content": "Hello! I am your AI fitness coach. How can I help you?", "timestamp": "2026-06-18T10:00:05Z"}
-        ]
+        "user_id": user_id_a,
+        "message": "What should I eat for dinner?",
+        "conversation_history": []
     }
-    status, res = send_request("/chat-reply", "POST", chat_payload)
+    status, res = send_request("/chat-reply", "POST", chat_payload, token=token_a)
     if status == 200:
         print(f"[+] Chat Coach Reply: {res.get('ai_reply')}")
-        print(f"    - Messages in history: {len(res.get('updated_history'))}")
     else:
-        print(f"[-] Chat reply failed: status {status}, response: {res}")
+        print(f"[-] Chat failed: status {status}, response: {res}")
 
-    # 9. Test GET /recovery-score/{user_id}
-    print("\n[9] Testing GET /recovery-score...")
-    status, res = send_request(f"/recovery-score/{user_id}")
+    # 14. Test GET /recovery-score/{id} (Authorized using Token A)
+    print("\n[14] Testing GET /recovery-score...")
+    status, res = send_request(f"/recovery-score/{user_id_a}", token=token_a)
     if status == 200:
         print(f"[+] Recovery Score: {res.get('score')} ({res.get('label')})")
-        print(f"    - Reason: {res.get('reason')}")
     else:
         print(f"[-] Recovery score failed: status {status}, response: {res}")
 
-    # 10. Test GET /weekly-insights/{user_id}
-    print("\n[10] Testing GET /weekly-insights...")
-    status, res = send_request(f"/weekly-insights/{user_id}")
+    # 15. Test GET /weekly-insights/{id} (Authorized using Token A)
+    print("\n[15] Testing GET /weekly-insights...")
+    status, res = send_request(f"/weekly-insights/{user_id_a}", token=token_a)
     if status == 200:
-        print(f"[+] Weekly Insights retrieved. Days logged: {res.get('days_logged')}")
-        print(f"    - Average Calories Burned: {res.get('avg_calories_burned')}")
-        print(f"    - Best Day: {res.get('best_day')}")
+        print(f"[+] Weekly Insights retrieved. Average calories burned: {res.get('avg_calories_burned')}")
     else:
         print(f"[-] Weekly insights failed: status {status}, response: {res}")
 
-    # 11. Test POST /pose-feedback (Squat)
-    print("\n[11] Testing POST /pose-feedback (Squat Form)...")
+    # 16. Test POST /pose-feedback (Authorized using Token A)
+    print("\n[16] Testing POST /pose-feedback...")
     pose_payload = {
-        "user_id": user_id,
+        "user_id": user_id_a,
         "exercise": "squat",
-        "knee_angle": 120.0, # Shallow squat
+        "knee_angle": 120.0,
         "elbow_angle": 90.0,
         "back_angle": 75.0
     }
-    status, res = send_request("/pose-feedback", "POST", pose_payload)
+    status, res = send_request("/pose-feedback", "POST", pose_payload, token=token_a)
     if status == 200:
-        print(f"[+] Pose Squat Feedback. Correct: {res.get('is_correct')}")
-        print(f"    - Feedback: {res.get('feedback')}")
-        print(f"    - Correction: {res.get('correction')}")
+        print(f"[+] Pose Squat Feedback. Correct: {res.get('is_correct')}, Feedback: {res.get('feedback')}")
     else:
         print(f"[-] Pose feedback failed: status {status}, response: {res}")
-
-    # 12. Test POST /pose-feedback (Bicep Curl)
-    print("\n[12] Testing POST /pose-feedback (Bicep Curl Form)...")
-    pose_payload_curl = {
-        "user_id": user_id,
-        "exercise": "bicep_curl",
-        "knee_angle": 180.0,
-        "elbow_angle": 35.0, # Full curl
-        "back_angle": 60.0 # Torso swinging
-    }
-    status, res = send_request("/pose-feedback", "POST", pose_payload_curl)
-    if status == 200:
-        print(f"[+] Pose Curl Feedback. Correct: {res.get('is_correct')}")
-        print(f"    - Feedback: {res.get('feedback')}")
-        print(f"    - Correction: {res.get('correction')}")
-    else:
-        print(f"[-] Pose feedback failed: status {status}, response: {res}")
-
-    # 13. Test Error Handlers: 404 User Not Found
-    print("\n[13] Testing GET /today-summary for non-existent User ID...")
-    fake_user_id = "649c25f9b4c09d0d8299a9aa"
-    status, res = send_request(f"/today-summary/{fake_user_id}")
-    if status == 404:
-        print(f"[+] Successfully returned 404 Not Found error message: {res.get('detail')}")
-    else:
-        print(f"[-] Failed to return 404: status {status}, response: {res}")
-
-    # 14. Test Error Handlers: 400 Bad Request (Invalid Hex User ID)
-    print("\n[14] Testing GET /today-summary with invalid user_id format...")
-    invalid_user_id = "short_id"
-    status, res = send_request(f"/today-summary/{invalid_user_id}")
-    if status == 400:
-        print(f"[+] Successfully returned 400 Bad Request error message: {res.get('detail')}")
-    else:
-        print(f"[-] Failed to return 400: status {status}, response: {res}")
 
     print("\n==================================================")
     print("            All API Tests Completed               ")

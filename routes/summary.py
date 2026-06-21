@@ -1,18 +1,29 @@
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from database import get_db
-from routes.user import verify_user_exists
+from routes.user import verify_user_exists, get_current_user_id
 from routes.workout import get_today_start
 from utils.macro_calc import calculate_daily_targets
 
 router = APIRouter()
 
 @router.get("/today-summary/{user_id}", status_code=status.HTTP_200_OK)
-async def get_today_summary(user_id: str, db = Depends(get_db)):
+async def get_today_summary(
+    user_id: str,
+    db = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
     """
     Returns today's summary of physical activity and nutrition targets.
     Handles empty/unlogged states gracefully.
     """
+    # Enforce authentication user match
+    if user_id != current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Cannot access summaries for another user"
+        )
+        
     # 1. Verify user exists
     user = await verify_user_exists(user_id, db)
     weight_kg = user.get("weight_kg", 70.0)

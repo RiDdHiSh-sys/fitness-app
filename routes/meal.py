@@ -2,7 +2,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from models.meal import MealCreate, MealResponse, MealDB
 from database import get_db
-from routes.user import verify_user_exists
+from routes.user import verify_user_exists, get_current_user_id
 from routes.workout import get_today_start
 from utils.macro_calc import calculate_recovery_score
 
@@ -57,11 +57,22 @@ async def update_daily_log_meal(db, user_id: str, date: datetime, calories: floa
         )
 
 @router.post("/meal", response_model=MealResponse, status_code=status.HTTP_201_CREATED)
-async def log_meal(meal_data: MealCreate, db = Depends(get_db)):
+async def log_meal(
+    meal_data: MealCreate,
+    db = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
     """
     Logs a meal for a user.
     Aggregates total calories and macro details across food items and updates daily log.
     """
+    # Enforce authentication user match
+    if meal_data.user_id != current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Cannot log meals for another user"
+        )
+        
     # 1. Verify user exists
     await verify_user_exists(meal_data.user_id, db)
     

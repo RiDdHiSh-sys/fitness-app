@@ -2,7 +2,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from models.workout import WorkoutCreate, WorkoutResponse, WorkoutDB, WorkoutIntensity
 from database import get_db
-from routes.user import verify_user_exists
+from routes.user import verify_user_exists, get_current_user_id
 from utils.calorie_calc import calculate_calories_burned
 from utils.macro_calc import calculate_recovery_score
 
@@ -63,12 +63,23 @@ async def update_daily_log_workout(db, user_id: str, date: datetime, calories_bu
         )
 
 @router.post("/workout", response_model=WorkoutResponse, status_code=status.HTTP_201_CREATED)
-async def log_workout(workout_data: WorkoutCreate, db = Depends(get_db)):
+async def log_workout(
+    workout_data: WorkoutCreate,
+    db = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
     """
     Logs a workout session for a user.
     Calculates total calories burned using the MET formula based on the user's weight.
     Determines workout intensity and syncs with daily logs.
     """
+    # Enforce authentication user match
+    if workout_data.user_id != current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Cannot log workouts for another user"
+        )
+        
     # 1. Verify user exists and get their weight
     user = await verify_user_exists(workout_data.user_id, db)
     weight_kg = user.get("weight_kg", 70.0) # default if not set

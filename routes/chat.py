@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from models.chat import ChatRequest, ChatResponse, ChatMessage, ChatRole
 from database import get_db
-from routes.user import verify_user_exists
+from routes.user import verify_user_exists, get_current_user_id
 from routes.workout import get_today_start
 
 router = APIRouter()
@@ -134,11 +134,22 @@ async def generate_gemini_chat_reply(api_key: str, message: str, history: list, 
     return ""
 
 @router.post("/chat-reply", response_model=ChatResponse, status_code=status.HTTP_200_OK)
-async def chat_reply(chat_req: ChatRequest, db = Depends(get_db)):
+async def chat_reply(
+    chat_req: ChatRequest,
+    db = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
     """
     Logs user chat, computes a context-rich reply using current day statistics,
     and updates chat session logs in the database.
     """
+    # Enforce authentication user match
+    if chat_req.user_id != current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Cannot chat on behalf of another user"
+        )
+        
     # 1. Verify user exists
     user = await verify_user_exists(chat_req.user_id, db)
     weight_kg = user.get("weight_kg", 70.0)
