@@ -56,41 +56,60 @@ jobs:
       - name: Patch Gradle signing configuration
         run: |
           python3 << 'PYEOF'
-          import re
-
           path = "mobile/android/app/build.gradle"
           with open(path, "r") as f:
               content = f.read()
 
-          # Signing config block to inject
-          signing_config = """
-              signingConfigs {
-                  release {
-                      storeFile file("release.keystore")
-                      storePassword project.findProperty("KEYSTORE_PASS") ?: ""
-                      keyAlias project.findProperty("KEY_ALIAS") ?: ""
-                      keyPassword project.findProperty("KEY_PASS") ?: ""
-                  }
-              }
-          """
+          # Normalize line endings to \n
+          content = content.replace("\r\n", "\n")
 
-          # Inject signingConfigs before buildTypes
-          if "signingConfigs" not in content:
-              content = content.replace(
-                  "    buildTypes {",
-                  signing_config + "\n    buildTypes {",
-                  1
-              )
+          # Inject release signing config
+          old_signing = """    signingConfigs {
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }"""
 
-          # Make release build type use signing config
-          release_patch = """        release {
-                  signingConfig signingConfigs.release"""
-          content = re.sub(
-              r'        release \{',
-              release_patch,
-              content,
-              count=1
-          )
+          new_signing = """    signingConfigs {
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+        release {
+            storeFile file("release.keystore")
+            storePassword project.findProperty("KEYSTORE_PASS") ?: ""
+            keyAlias project.findProperty("KEY_ALIAS") ?: ""
+            keyPassword project.findProperty("KEY_PASS") ?: ""
+        }
+    }"""
+
+          if old_signing in content:
+              content = content.replace(old_signing, new_signing)
+          else:
+              print("Warning: could not find debug signingConfigs block, attempting fallback injection")
+              if "signingConfigs {" in content and "release {" not in content:
+                  content = content.replace("signingConfigs {", "signingConfigs {\n        release {\n            storeFile file(\"release.keystore\")\n            storePassword project.findProperty(\"KEYSTORE_PASS\") ?: \"\"\n            keyAlias project.findProperty(\"KEY_ALIAS\") ?: \"\"\n            keyPassword project.findProperty(\"KEY_PASS\") ?: \"\"\n        }")
+
+          # Update release buildType to use release signing config
+          old_release_config = """        release {
+            // Caution! In production, you need to generate your own keystore file.
+            // see https://reactnative.dev/docs/signed-apk-android.
+            signingConfig signingConfigs.debug"""
+
+          new_release_config = """        release {
+            // Caution! In production, you need to generate your own keystore file.
+            // see https://reactnative.dev/docs/signed-apk-android.
+            signingConfig signingConfigs.release"""
+
+          if old_release_config in content:
+              content = content.replace(old_release_config, new_release_config)
+          else:
+              print("Warning: could not find release buildType block")
 
           with open(path, "w") as f:
               f.write(content)
