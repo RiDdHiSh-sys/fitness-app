@@ -42,15 +42,10 @@ fitness_app/
 │   ├── chat.py
 │   ├── recovery.py
 │   ├── insights.py
-<<<<<<< HEAD
-│   └── pose.py
+│   ├── pose.py
+│   └── ai_insights.py
 └── utils/                # Calculation & Security utilities
     ├── auth.py           # password hashing, JWT generation, OAuth validation
-=======
-│   |── pose.py
-|   └──ai_insights.py
-└── utils/                # Calculation utilities
->>>>>>> 3e93c3a (Update README.md)
     ├── calorie_calc.py   # MET-based calorie burn calculator
     └── macro_calc.py     # ICMR target macro & recovery score builders
 ```

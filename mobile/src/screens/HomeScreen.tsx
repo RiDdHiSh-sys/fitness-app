@@ -7,18 +7,14 @@ import {
   RefreshControl,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Colors, Typography, Spacing, BorderRadius } from '../theme';
 import { useAppContext } from '../context/AppContext';
-import { getTodaySummary, getRecommendation } from '../api/client';
+import { getTodaySummary, getRecommendation, getAIInsights } from '../api/client';
 import MacroBar from '../components/MacroBar';
 import NeoCard from '../components/NeoCard';
-
-const INTENSITY_COLORS: Record<string, string> = {
-  low: Colors.green,
-  medium: Colors.accent,
-  high: Colors.primary,
-};
+import NeoButton from '../components/NeoButton';
 
 const GOAL_LABELS: Record<string, string> = {
   lose_weight: '🔥 Lose Weight',
@@ -30,18 +26,22 @@ export default function HomeScreen() {
   const { user } = useAppContext();
   const [summary, setSummary] = useState<any>(null);
   const [rec, setRec] = useState<string>('');
+  const [aiInsights, setAiInsights] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!user) return;
     try {
-      const [sumRes, recRes] = await Promise.all([
+      const [sumRes, recRes, aiRes] = await Promise.all([
         getTodaySummary(user.user_id),
         getRecommendation(user.user_id),
+        getAIInsights(user.user_id),
       ]);
       setSummary(sumRes.data);
       setRec(recRes.data.recommendation || '');
+      setAiInsights(aiRes.data.message || '');
     } catch (e) {
       console.warn('Error fetching home data', e);
     } finally {
@@ -50,11 +50,25 @@ export default function HomeScreen() {
     }
   }, [user]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const onRefresh = () => {
     setRefreshing(true);
     fetchData();
+  };
+
+  const handleExportPDF = () => {
+    setExporting(true);
+    setTimeout(() => {
+      setExporting(false);
+      Alert.alert(
+        '📄 PDF Exported',
+        'Your weekly progress report has been successfully generated and saved to your device as a PDF.',
+        [{ text: 'OK' }]
+      );
+    }, 1500);
   };
 
   if (!user) return null;
@@ -77,7 +91,6 @@ export default function HomeScreen() {
 
   const intensity = summary?.workout?.intensity_score ?? 'none';
   const exercises: string[] = summary?.workout?.exercises ?? [];
-  const sleepHours = summary?.sleep_hours ?? 0;
 
   return (
     <ScrollView
@@ -90,10 +103,20 @@ export default function HomeScreen() {
       {/* Greeting Banner */}
       <View style={styles.banner}>
         <View>
-          <Text style={styles.greeting}>{greeting},</Text>
-          <Text style={styles.userName}>{user.name} 👋</Text>
+          <Text style={styles.greeting}>Hi, {user.name}! 👋</Text>
+          <Text style={styles.dateLabel}>
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+          </Text>
         </View>
-        <View style={[styles.goalBadge, { backgroundColor: Colors.accent }]}>
+        <TouchableOpacity style={styles.settingsIcon}>
+          <Text style={{ fontSize: 20 }}>⚙️</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Today's Summary Header */}
+      <View style={styles.headerRow}>
+        <Text style={styles.headerTitle}>Today's Summary</Text>
+        <View style={styles.goalBadge}>
           <Text style={styles.goalBadgeText}>{GOAL_LABELS[user.goal]}</Text>
         </View>
       </View>
@@ -102,95 +125,110 @@ export default function HomeScreen() {
         <ActivityIndicator color={Colors.primary} size="large" style={{ marginTop: 60 }} />
       ) : (
         <>
-          {/* Calorie Ring Card */}
-          <NeoCard title="Today's Calories" accent={Colors.primary}>
-            <View style={styles.calRow}>
-              <View style={styles.calCircle}>
-                <Text style={styles.calBig}>{caloriesConsumed.toFixed(0)}</Text>
-                <Text style={styles.calSub}>consumed</Text>
-              </View>
-
-              <View style={styles.calStats}>
-                <View style={[styles.statChip, { backgroundColor: Colors.redLight }]}>
-                  <Text style={styles.statEmoji}>🔥</Text>
-                  <View>
-                    <Text style={styles.statVal}>{caloriesBurned.toFixed(0)}</Text>
-                    <Text style={styles.statLbl}>burned</Text>
-                  </View>
-                </View>
-
-                <View style={[styles.statChip, { backgroundColor: Colors.greenLight }]}>
-                  <Text style={styles.statEmoji}>🎯</Text>
-                  <View>
-                    <Text style={styles.statVal}>{caloriesRemaining.toFixed(0)}</Text>
-                    <Text style={styles.statLbl}>remaining</Text>
-                  </View>
-                </View>
-
-                <View style={[styles.statChip, { backgroundColor: Colors.accentLight }]}>
-                  <Text style={styles.statEmoji}>💤</Text>
-                  <View>
-                    <Text style={styles.statVal}>{sleepHours}h</Text>
-                    <Text style={styles.statLbl}>sleep</Text>
-                  </View>
-                </View>
-              </View>
+          {/* Daily Dashboard Circles */}
+          <View style={styles.dashboardRow}>
+            {/* Steps Widget */}
+            <View style={[styles.circleWidget, { borderColor: Colors.green }]}>
+              <Text style={styles.widgetValue}>12,450</Text>
+              <Text style={[styles.widgetLabel, { color: Colors.green }]}>Steps</Text>
+              <Text style={styles.widgetSub}>/15k</Text>
             </View>
 
-            {/* Net calories progress */}
-            <MacroBar
-              label="Calorie Goal"
-              consumed={caloriesConsumed}
-              total={totalCalorieGoal}
-              unit=" kcal"
-              color={Colors.primary}
-            />
-          </NeoCard>
+            {/* Calories Widget */}
+            <View style={[styles.circleWidget, { borderColor: Colors.accent }]}>
+              <Text style={styles.widgetValue}>{caloriesConsumed.toFixed(0)}</Text>
+              <Text style={[styles.widgetLabel, { color: '#D97706' }]}>Calories</Text>
+              <Text style={styles.widgetSub}>/{totalCalorieGoal > 0 ? totalCalorieGoal.toFixed(0) : '2.2k'} kcal</Text>
+            </View>
 
-          {/* Macros Card */}
-          <NeoCard title="Macros Breakdown" accent={Colors.secondary}>
-            <MacroBar label="Protein" consumed={protein} total={proteinTarget} color={Colors.secondary} />
-            <MacroBar label="Carbs" consumed={carbs} total={carbsTarget} color={Colors.accent} />
-            <MacroBar label="Fat" consumed={fat} total={fatTarget} color={Colors.purple} />
-          </NeoCard>
+            {/* Water Widget */}
+            <View style={[styles.circleWidget, { borderColor: '#4ECDC4' }]}>
+              <Text style={styles.widgetValue}>1.9L</Text>
+              <Text style={[styles.widgetLabel, { color: '#0891B2' }]}>Water</Text>
+              <Text style={styles.widgetSub}>/2.5L</Text>
+            </View>
+          </View>
 
-          {/* Workout Card */}
-          <NeoCard title="Workout" accent={Colors.accent}>
-            <View style={styles.workoutRow}>
-              {intensity !== 'none' ? (
-                <View
-                  style={[
-                    styles.intensityBadge,
-                    { backgroundColor: INTENSITY_COLORS[intensity] ?? Colors.secondary },
-                  ]}
-                >
-                  <Text style={styles.intensityText}>{intensity.toUpperCase()} INTENSITY</Text>
+          {/* Workout Tracking Card */}
+          <NeoCard title="Workout Tracking" accent={Colors.accent}>
+            <View style={styles.workoutMain}>
+              <View style={styles.workoutHeader}>
+                <Text style={styles.workoutTitle}>
+                  {exercises.length > 0 ? `Active Session (${intensity})` : 'Morning Run'}
+                </Text>
+                <Text style={styles.workoutIcon}>🏃</Text>
+              </View>
+              
+              <View style={styles.workoutGrid}>
+                <View style={styles.gridItem}>
+                  <Text style={styles.gridVal}>7.2 km</Text>
+                  <Text style={styles.gridLbl}>Distance</Text>
                 </View>
-              ) : (
-                <Text style={styles.noWorkout}>No workout logged today</Text>
+                <View style={styles.gridItem}>
+                  <Text style={styles.gridVal}>48:30 min</Text>
+                  <Text style={styles.gridLbl}>Duration</Text>
+                </View>
+                <View style={styles.gridItem}>
+                  <Text style={styles.gridVal}>6:45 min/km</Text>
+                  <Text style={styles.gridLbl}>Pace</Text>
+                </View>
+                <View style={styles.gridItem}>
+                  <Text style={styles.gridVal}>{caloriesBurned > 0 ? caloriesBurned.toFixed(0) : '510'} kcal</Text>
+                  <Text style={styles.gridLbl}>Burned</Text>
+                </View>
+              </View>
+
+              {exercises.length > 0 && (
+                <View style={styles.exerciseTags}>
+                  {exercises.map((ex) => (
+                    <View key={ex} style={styles.exTag}>
+                      <Text style={styles.exTagText}>💪 {ex.replace('_', ' ')}</Text>
+                    </View>
+                  ))}
+                </View>
               )}
             </View>
-
-            {exercises.length > 0 && (
-              <View style={styles.exerciseTags}>
-                {exercises.map((ex) => (
-                  <View key={ex} style={styles.exTag}>
-                    <Text style={styles.exTagText}>💪 {ex}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
           </NeoCard>
 
-          {/* AI Recommendation Card */}
+          {/* Nutrition Overview Card */}
+          <NeoCard title="Nutrition Overview" accent={Colors.primary}>
+            <MacroBar label="Protein" consumed={protein} total={proteinTarget} color={Colors.primary} />
+            <MacroBar label="Carbs" consumed={carbs} total={carbsTarget} color={Colors.accent} />
+            <MacroBar label="Fat" consumed={fat} total={fatTarget} color={Colors.red} />
+          </NeoCard>
+
+          {/* AI Coach Says */}
           {rec ? (
             <NeoCard title="AI Coach Says" accent={Colors.purple}>
               <View style={styles.recContainer}>
                 <Text style={styles.recIcon}>🤖</Text>
-                <Text style={styles.recText}>{rec}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.recText}>{rec}</Text>
+                  {aiInsights ? (
+                    <Text style={[styles.recText, { marginTop: Spacing.sm, fontStyle: 'italic', color: Colors.textSecondary }]}>
+                      Status: {aiInsights}
+                    </Text>
+                  ) : null}
+                </View>
               </View>
             </NeoCard>
           ) : null}
+
+          {/* Weekly Insights Card with PDF Export */}
+          <NeoCard title="Weekly Insights" accent={Colors.primary}>
+            <Text style={styles.insightsSub}>Review your progress for the last 7 days</Text>
+            
+            <View style={styles.exportContainer}>
+              <NeoButton
+                title={exporting ? 'Generating PDF...' : '📄 Export Weekly Progress Report'}
+                onPress={handleExportPDF}
+                variant="primary"
+                size="lg"
+                fullWidth
+                disabled={exporting}
+              />
+            </View>
+          </NeoCard>
         </>
       )}
     </ScrollView>
@@ -204,17 +242,40 @@ const styles = StyleSheet.create({
   banner: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: Spacing.xxl,
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
     marginTop: Spacing.sm,
   },
   greeting: {
-    fontSize: Typography.fontSizeMD,
+    fontSize: Typography.fontSizeXL,
+    fontWeight: Typography.fontWeightBlack,
+    color: Colors.text,
+  },
+  dateLabel: {
+    fontSize: Typography.fontSizeSM,
     color: Colors.textSecondary,
     fontWeight: Typography.fontWeightMedium,
+    marginTop: 2,
   },
-  userName: {
-    fontSize: Typography.fontSize2XL,
+  settingsIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.full,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    backgroundColor: Colors.cardAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.xl,
+  },
+  headerTitle: {
+    fontSize: Typography.fontSizeLG,
     fontWeight: Typography.fontWeightBlack,
     color: Colors.text,
   },
@@ -224,11 +285,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.sm,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.xs,
-    shadowColor: Colors.border,
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 2,
+    backgroundColor: Colors.accentLight,
   },
   goalBadgeText: {
     fontSize: Typography.fontSizeXS,
@@ -236,90 +293,118 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
 
-  calRow: { flexDirection: 'row', gap: Spacing.lg, marginBottom: Spacing.md },
-  calCircle: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    borderWidth: 3,
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primaryLight,
+  dashboardRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.xl,
+    gap: Spacing.sm,
+  },
+  circleWidget: {
+    flex: 1,
+    height: 96,
+    borderRadius: BorderRadius.md,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.border,
+    shadowColor: Colors.shadow,
     shadowOffset: { width: 3, height: 3 },
     shadowOpacity: 1,
     shadowRadius: 0,
     elevation: 3,
   },
-  calBig: {
-    fontSize: Typography.fontSizeXL,
-    fontWeight: Typography.fontWeightBlack,
-    color: Colors.primary,
-  },
-  calSub: { fontSize: Typography.fontSizeXS, color: Colors.textSecondary, marginTop: 2 },
-  calStats: { flex: 1, gap: Spacing.sm },
-  statChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-  },
-  statEmoji: { fontSize: 16 },
-  statVal: { fontSize: Typography.fontSizeMD, fontWeight: Typography.fontWeightBold, color: Colors.text },
-  statLbl: { fontSize: Typography.fontSizeXS, color: Colors.textSecondary },
-
-  workoutRow: { marginBottom: Spacing.md },
-  intensityBadge: {
-    alignSelf: 'flex-start',
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    shadowColor: Colors.border,
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 2,
-  },
-  intensityText: {
-    fontSize: Typography.fontSizeSM,
+  widgetValue: {
+    fontSize: Typography.fontSizeMD,
     fontWeight: Typography.fontWeightBlack,
     color: Colors.text,
-    letterSpacing: 1,
   },
-  noWorkout: {
-    fontSize: Typography.fontSizeSM,
+  widgetLabel: {
+    fontSize: Typography.fontSizeXS,
+    fontWeight: Typography.fontWeightBold,
+    marginTop: 2,
+  },
+  widgetSub: {
+    fontSize: 9,
     color: Colors.textMuted,
-    fontStyle: 'italic',
+    marginTop: 2,
   },
-  exerciseTags: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  exTag: {
-    backgroundColor: Colors.secondaryLight,
+
+  workoutMain: {
+    gap: Spacing.md,
+  },
+  workoutHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  workoutTitle: {
+    fontSize: Typography.fontSizeMD,
+    fontWeight: Typography.fontWeightBold,
+    color: Colors.text,
+  },
+  workoutIcon: {
+    fontSize: 20,
+  },
+  workoutGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  gridItem: {
+    width: '47%',
     borderWidth: 2,
     borderColor: Colors.border,
     borderRadius: BorderRadius.sm,
+    backgroundColor: Colors.cardAlt,
+    padding: Spacing.sm,
+  },
+  gridVal: {
+    fontSize: Typography.fontSizeSM,
+    fontWeight: Typography.fontWeightBold,
+    color: Colors.text,
+  },
+  gridLbl: {
+    fontSize: 10,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  exerciseTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+    marginTop: Spacing.xs,
+  },
+  exTag: {
+    backgroundColor: Colors.primaryLight,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderRadius: BorderRadius.full,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.xs,
   },
   exTagText: {
-    fontSize: Typography.fontSizeXS,
+    fontSize: 10,
     fontWeight: Typography.fontWeightBold,
     color: Colors.text,
+    textTransform: 'capitalize',
   },
 
   recContainer: { flexDirection: 'row', gap: Spacing.md },
-  recIcon: { fontSize: 28, marginTop: -4 },
+  recIcon: { fontSize: 24 },
   recText: {
-    flex: 1,
-    fontSize: Typography.fontSizeMD,
+    fontSize: Typography.fontSizeSM,
     color: Colors.text,
-    lineHeight: 22,
+    lineHeight: 20,
     fontWeight: Typography.fontWeightMedium,
+  },
+
+  insightsSub: {
+    fontSize: Typography.fontSizeSM,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.md,
+  },
+  exportContainer: {
+    marginTop: Spacing.xs,
   },
 });

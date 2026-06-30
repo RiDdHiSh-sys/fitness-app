@@ -1,0 +1,60 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd mobile
+          npm install
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Extract version from app.json
+        id: get_version
+        run: |
+          VERSION=$(jq -r '.expo.version' mobile/app.json)
+          VERSION_CODE=$(jq -r '.expo.android.versionCode' mobile/app.json)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
+          echo "Extracted version: $VERSION ($VERSION_CODE)"
+
+      - name: Prebuild Expo App
+        run: |
+          cd mobile
+          npx expo prebuild --platform android --no-install
+
+      - name: Build Android APK
+        run: |
+          cd mobile/android
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Rename and Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fitness-ai-v${{ env.VERSION }}-b${{ env.VERSION_CODE }}
+          path: mobile/android/app/build/outputs/apk/release/app-release.apk

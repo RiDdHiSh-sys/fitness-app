@@ -1,23 +1,23 @@
 // ─── Light Neobrutalism Design Tokens ────────────────────────────────────────
 export const Colors = {
   // Backgrounds
-  bg: '#FFFBF5',
+  bg: '#FFFFFF',
   card: '#FFFFFF',
-  cardAlt: '#F5F0E8',
+  cardAlt: '#F8FAF8',
 
   // Brand / Accent
-  primary: '#FF6B35',      // energetic orange
-  primaryLight: '#FFE4D6',
-  secondary: '#4ECDC4',    // teal
-  secondaryLight: '#D6F5F3',
+  primary: '#06D6A0',      // fresh green
+  primaryLight: '#E8FFF9',
+  secondary: '#FFE66D',    // yellow
+  secondaryLight: '#FFFDF0',
   accent: '#FFE66D',       // yellow highlight
-  accentLight: '#FFF9D6',
+  accentLight: '#FFFDF0',
   purple: '#845EC2',
-  purpleLight: '#E8DCFF',
+  purpleLight: '#F4EFFF',
   green: '#06D6A0',
-  greenLight: '#D6FFF5',
+  greenLight: '#E8FFF9',
   red: '#EF233C',
-  redLight: '#FFD6DB',
+  redLight: '#FFEAEA',
 
   // Text
   text: '#1A1A2E',

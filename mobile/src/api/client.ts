@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// ─── Deployed backend on Render ───────────────────────────────────────────────
-export const BASE_URL = 'https://fitness-nutrition-backend-odjl.onrender.com';
+// ─── Deployed backend on Vercel ──────────────────────────────────────────────
+export const BASE_URL = 'https://fitness-app-omega-mocha.vercel.app';
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -19,15 +19,48 @@ api.interceptors.response.use(
 
 export default api;
 
-// ─── User ─────────────────────────────────────────────────────────────────────
+// ─── User & Authentication ───────────────────────────────────────────────────
 export interface UserPayload {
+  email: string;
+  password?: string;
   name: string;
   age: number;
   weight_kg: number;
   height_cm: number;
   goal: 'lose_weight' | 'build_muscle' | 'maintain';
 }
+
+export interface LoginPayload {
+  email: string;
+  password?: string;
+}
+
+export interface OAuthPayload {
+  provider: 'google';
+  token: string;
+  name?: string;
+  age?: number;
+  weight_kg?: number;
+  height_cm?: number;
+  goal?: 'lose_weight' | 'build_muscle' | 'maintain';
+}
+
+let authToken: string | null = null;
+
+export const setAuthToken = (token: string | null) => {
+  authToken = token;
+};
+
+api.interceptors.request.use((config) => {
+  if (authToken) {
+    config.headers.Authorization = `Bearer ${authToken}`;
+  }
+  return config;
+});
+
 export const createUser = (data: UserPayload) => api.post('/user', data);
+export const loginUser = (data: LoginPayload) => api.post('/user/login', data);
+export const oauthLogin = (data: OAuthPayload) => api.post('/user/oauth-login', data);
 
 // ─── Workout ──────────────────────────────────────────────────────────────────
 export interface Exercise {
@@ -82,6 +115,10 @@ export const getRecoveryScore = (user_id: string) =>
 // ─── Weekly Insights ─────────────────────────────────────────────────────────
 export const getWeeklyInsights = (user_id: string) =>
   api.get(`/weekly-insights/${user_id}`);
+
+// ─── AI Insights ─────────────────────────────────────────────────────────────
+export const getAIInsights = (user_id: string) =>
+  api.get(`/ai-insights/${user_id}`);
 
 // ─── Pose Feedback ────────────────────────────────────────────────────────────
 export const getPoseFeedback = (
