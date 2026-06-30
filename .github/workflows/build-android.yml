@@ -16,7 +16,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
           cache: 'npm'
           cache-dependency-path: mobile/package-lock.json
 
@@ -48,10 +48,68 @@ jobs:
           cd mobile
           npx expo prebuild --platform android --no-install
 
+      - name: Decode release keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > mobile/android/app/release.keystore
+          echo "✅ Keystore decoded"
+
+      - name: Patch Gradle signing configuration
+        run: |
+          python3 << 'PYEOF'
+          import re
+
+          path = "mobile/android/app/build.gradle"
+          with open(path, "r") as f:
+              content = f.read()
+
+          # Signing config block to inject
+          signing_config = """
+              signingConfigs {
+                  release {
+                      storeFile file("release.keystore")
+                      storePassword project.findProperty("KEYSTORE_PASS") ?: ""
+                      keyAlias project.findProperty("KEY_ALIAS") ?: ""
+                      keyPassword project.findProperty("KEY_PASS") ?: ""
+                  }
+              }
+          """
+
+          # Inject signingConfigs before buildTypes
+          if "signingConfigs" not in content:
+              content = content.replace(
+                  "    buildTypes {",
+                  signing_config + "\n    buildTypes {",
+                  1
+              )
+
+          # Make release build type use signing config
+          release_patch = """        release {
+                  signingConfig signingConfigs.release"""
+          content = re.sub(
+              r'        release \{',
+              release_patch,
+              content,
+              count=1
+          )
+
+          with open(path, "w") as f:
+              f.write(content)
+
+          print("✅ build.gradle patched with signing config")
+          PYEOF
+
       - name: Build Android APK
         run: |
           cd mobile/android
-          ./gradlew assembleRelease --no-daemon
+          chmod +x gradlew
+          ./gradlew assembleRelease \
+            -PKEYSTORE_PASS="${{ secrets.KEYSTORE_PASSWORD }}" \
+            -PKEY_ALIAS="${{ secrets.KEY_ALIAS }}" \
+            -PKEY_PASS="${{ secrets.KEY_PASSWORD }}" \
+            --no-daemon \
+            --stacktrace
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.daemon=false"
 
       - name: Rename and Upload APK Artifact
         uses: actions/upload-artifact@v4
