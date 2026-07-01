@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from database import get_db
 from routes.user import get_current_user_id
 
-oad_dotenv()
+load_dotenv()
 
 router = APIRouter(prefix="/coach", tags=["AI Coach"])
 
