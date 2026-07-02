@@ -318,20 +318,7 @@ export default function OnboardingScreen() {
           </View>
         </View>
 
-        {/* Features */}
-        <View style={styles.features}>
-          {[
-            { icon: '🤖', text: 'AI Coaching & Chat' },
-            { icon: '📊', text: 'Macro Tracking' },
-            { icon: '💤', text: 'Recovery Insights' },
-            { icon: '🎯', text: 'Pose Feedback' },
-          ].map((f) => (
-            <View key={f.text} style={styles.featureItem}>
-              <Text style={styles.featureIcon}>{f.icon}</Text>
-              <Text style={styles.featureText}>{f.text}</Text>
-            </View>
-          ))}
-        </View>
+
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -536,33 +523,5 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
 
-  features: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.md,
-    justifyContent: 'center',
-  },
-  featureItem: {
-    alignItems: 'center',
-    width: '40%',
-    backgroundColor: Colors.card,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    shadowColor: Colors.border,
-    shadowOffset: { width: 3, height: 3 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 3,
-  },
-  featureIcon: { fontSize: 28, marginBottom: Spacing.xs },
-  featureText: {
-    fontSize: Typography.fontSizeXS,
-    fontWeight: Typography.fontWeightBold,
-    color: Colors.text,
-    textAlign: 'center',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
+
 });
