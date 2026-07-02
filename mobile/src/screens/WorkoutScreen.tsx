@@ -9,12 +9,18 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { Colors, Typography, Spacing, BorderRadius } from '../theme';
 import { useAppContext } from '../context/AppContext';
 import { logWorkout, Exercise } from '../api/client';
 import NeoButton from '../components/NeoButton';
 import NeoInput from '../components/NeoInput';
 import NeoCard from '../components/NeoCard';
+
+const AI_EXERCISES = [
+  { key: 'squat', label: 'Squat', emoji: '🦵' },
+  { key: 'bicep_curl', label: 'Bicep Curl', emoji: '💪' },
+];
 
 const EXERCISE_PRESETS = [
   { name: 'squat', met_value: 5.0, emoji: '🦵' },
@@ -55,9 +61,11 @@ const defaultExercise = (): ExerciseForm => ({
 
 export default function WorkoutScreen() {
   const { user } = useAppContext();
+  const navigation = useNavigation<any>();
   const [exercises, setExercises] = useState<ExerciseForm[]>([defaultExercise()]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [selectedAiEx, setSelectedAiEx] = useState('squat');
 
   const updateExercise = (idx: number, field: keyof ExerciseForm, val: string) => {
     setExercises((prev) => {
@@ -136,6 +144,49 @@ export default function WorkoutScreen() {
             </View>
           </View>
         )}
+
+        {/* AI Real-Time Workout */}
+        <NeoCard title="AI Live Form Check 🤖" accent={Colors.primary} style={{ marginBottom: Spacing.xl }}>
+          <Text style={styles.aiSubtitle}>
+            Perform exercises in front of your camera and get real-time feedback on your form and posture.
+          </Text>
+          
+          <View style={styles.aiGrid}>
+            {AI_EXERCISES.map((ex) => {
+              const isActive = selectedAiEx === ex.key;
+              return (
+                <TouchableOpacity
+                  key={ex.key}
+                  style={[styles.aiItem, isActive && styles.aiItemActive]}
+                  onPress={() => setSelectedAiEx(ex.key)}
+                >
+                  <Text style={styles.aiEmoji}>{ex.emoji}</Text>
+                  <Text style={[styles.aiLabel, isActive && styles.aiLabelActive]}>
+                    {ex.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <NeoButton
+            title="Start AI Workout 🚀"
+            onPress={() => {
+              navigation.navigate('Pose', { exercise: selectedAiEx });
+            }}
+            variant="primary"
+            size="lg"
+            fullWidth
+            style={{ marginTop: Spacing.xs }}
+          />
+        </NeoCard>
+
+        {/* Section Header for Logging */}
+        <View style={{ marginBottom: Spacing.lg }}>
+          <Text style={{ fontSize: Typography.fontSizeLG, fontWeight: Typography.fontWeightBlack, color: Colors.text }}>
+            Log Manual Workout
+          </Text>
+        </View>
 
         {/* Exercises */}
         {exercises.map((ex, idx) => (
@@ -282,4 +333,47 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
   },
   addBtnText: { fontSize: Typography.fontSizeMD, fontWeight: Typography.fontWeightBold, color: Colors.textSecondary },
+
+  aiSubtitle: {
+    fontSize: Typography.fontSizeSM,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.md,
+    lineHeight: 18,
+  },
+  aiGrid: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  aiItem: {
+    flex: 1,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: Colors.borderLight,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    backgroundColor: Colors.cardAlt,
+  },
+  aiItemActive: {
+    backgroundColor: Colors.primaryLight,
+    borderColor: Colors.border,
+    shadowColor: Colors.border,
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
+  },
+  aiEmoji: {
+    fontSize: 24,
+    marginBottom: Spacing.xs,
+  },
+  aiLabel: {
+    fontSize: Typography.fontSizeSM,
+    color: Colors.textSecondary,
+    fontWeight: Typography.fontWeightMedium,
+  },
+  aiLabelActive: {
+    color: Colors.primary,
+    fontWeight: Typography.fontWeightBold,
+  },
 });

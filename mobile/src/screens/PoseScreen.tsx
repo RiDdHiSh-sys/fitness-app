@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRoute } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -39,6 +40,7 @@ const ANGLE_PRESETS: Record<string, { knee: string; elbow: string; back: string 
 
 export default function PoseScreen() {
   const { user } = useAppContext();
+  const route = useRoute<any>();
   const [selectedEx, setSelectedEx] = useState('squat');
   const [kneeAngle, setKneeAngle] = useState('120');
   const [elbowAngle, setElbowAngle] = useState('90');
@@ -56,6 +58,12 @@ export default function PoseScreen() {
     }
     setResult(null);
   };
+
+  useEffect(() => {
+    if (route.params?.exercise) {
+      selectExercise(route.params.exercise);
+    }
+  }, [route.params?.exercise]);
 
   const handleAnalyze = async () => {
     if (!user) return;
